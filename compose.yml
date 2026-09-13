@@ -1,0 +1,264 @@
+name: media-stack
+
+services:
+  jellyfin:
+    image: ${JELLYFIN_IMAGE}
+    container_name: jellyfin
+    user: "${PUID}:${PGID}"
+    group_add:
+      - "${RENDER_GID}"
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - type: bind
+        source: /srv/media-stack/config/jellyfin
+        target: /config
+      - type: bind
+        source: /srv/media-stack/config/jellyfin/cache
+        target: /cache
+      - type: bind
+        source: /srv/media-stack/data/media
+        target: /media
+        read_only: true
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    ports:
+      - "${JELLYFIN_LAN_IP}:8096:8096/tcp"
+    networks:
+      - media
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  qbittorrent:
+    image: ${QBITTORRENT_IMAGE}
+    container_name: qbittorrent
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      UMASK: "002"
+      # 8080 belongs to the existing Nextcloud deployment on this host.
+      WEBUI_PORT: "8181"
+      TORRENTING_PORT: "6881"
+    volumes:
+      - type: bind
+        source: /srv/media-stack/config/qbittorrent
+        target: /config
+      - type: bind
+        source: /srv/media-stack/data
+        target: /data
+    ports:
+      - "${JELLYFIN_LAN_IP}:8181:8181/tcp"
+      - "${JELLYFIN_LAN_IP}:6881:6881/tcp"
+      - "${JELLYFIN_LAN_IP}:6881:6881/udp"
+    networks:
+      - media
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 60s
+    restart: unless-stopped
+
+  prowlarr:
+    image: ${PROWLARR_IMAGE}
+    container_name: prowlarr
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      UMASK: "002"
+    volumes:
+      - type: bind
+        source: /srv/media-stack/config/prowlarr
+        target: /config
+    ports:
+      - "${JELLYFIN_LAN_IP}:9696:9696/tcp"
+    networks:
+      - media
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  sonarr:
+    image: ${SONARR_IMAGE}
+    container_name: sonarr
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      UMASK: "002"
+    volumes:
+      - type: bind
+        source: /srv/media-stack/config/sonarr
+        target: /config
+      - type: bind
+        source: /srv/media-stack/data
+        target: /data
+    ports:
+      - "${JELLYFIN_LAN_IP}:8989:8989/tcp"
+    networks:
+      - media
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  radarr:
+    image: ${RADARR_IMAGE}
+    container_name: radarr
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      UMASK: "002"
+    volumes:
+      - type: bind
+        source: /srv/media-stack/config/radarr
+        target: /config
+      - type: bind
+        source: /srv/media-stack/data
+        target: /data
+    ports:
+      - "${JELLYFIN_LAN_IP}:7878:7878/tcp"
+    networks:
+      - media
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  seerr:
+    image: ${SEERR_IMAGE}
+    container_name: seerr
+    init: true
+    environment:
+      TZ: ${TZ}
+      PORT: "5055"
+    volumes:
+      # Retain the planned Jellyseerr configuration path for straightforward
+      # backups and to make any future migration transparent.
+      - type: bind
+        source: /srv/media-stack/config/jellyseerr
+        target: /app/config
+    ports:
+      - "${JELLYFIN_LAN_IP}:5055:5055/tcp"
+    networks:
+      - media
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5055/api/v1/status || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  bazarr:
+    image: ${BAZARR_IMAGE}
+    container_name: bazarr
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      UMASK: "002"
+    volumes:
+      - type: bind
+        source: /srv/media-stack/config/bazarr
+        target: /config
+      # This must exactly match Sonarr and Radarr's media path. Consistent
+      # paths avoid Bazarr path-mapping errors.
+      - type: bind
+        source: /srv/media-stack/data
+        target: /data
+    ports:
+      - "${JELLYFIN_LAN_IP}:6767:6767/tcp"
+    networks:
+      - media
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  recyclarr:
+    image: ${RECYCLARR_IMAGE}
+    container_name: recyclarr
+    user: "${PUID}:${PGID}"
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - type: bind
+        source: /srv/media-stack/config/recyclarr
+        target: /config
+    networks:
+      - media
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  maintainerr:
+    image: ${MAINTAINERR_IMAGE}
+    container_name: maintainerr
+    user: "${PUID}:${PGID}"
+    environment:
+      TZ: ${TZ}
+      # Keep anonymous usage reporting disabled for this private LAN service.
+      TELEMETRY: "off"
+    volumes:
+      - type: bind
+        source: /srv/media-stack/config/maintainerr
+        target: /opt/data
+    ports:
+      # Maintainerr has no built-in login; it must remain LAN-only.
+      - "${JELLYFIN_LAN_IP}:6246:6246/tcp"
+    networks:
+      - media
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  scrutiny:
+    image: ${SCRUTINY_IMAGE}
+    container_name: scrutiny
+    environment:
+      TZ: ${TZ}
+      # One low-impact SMART scan each day; an initial scan is run after start.
+      COLLECTOR_CRON_SCHEDULE: "15 3 * * *"
+    volumes:
+      - type: bind
+        source: /srv/media-stack/config/scrutiny
+        target: /opt/scrutiny/config
+      - type: bind
+        source: /srv/media-stack/config/scrutiny/influxdb
+        target: /opt/scrutiny/influxdb
+      - type: bind
+        source: /run/udev
+        target: /run/udev
+        read_only: true
+    # Restrict SMART access to the one detected physical disk, rather than
+    # passing the complete /dev tree through to the container.
+    devices:
+      - /dev/sda:/dev/sda
+    cap_add:
+      - SYS_RAWIO
+    ports:
+      - "${JELLYFIN_LAN_IP}:8081:8080/tcp"
+    networks:
+      - media
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  cloudflared-media:
+    image: ${CLOUDFLARED_MEDIA_IMAGE}
+    container_name: cloudflared-media
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARED_MEDIA_TOKEN}
+    networks:
+      # Separate from the existing Nextcloud connector so every configured
+      # origin is reachable by every connector serving this tunnel.
+      - media
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+networks:
+  media:
+    name: media
+    driver: bridge

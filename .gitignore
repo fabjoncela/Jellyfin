@@ -1,0 +1,20 @@
+# Secrets and machine-specific runtime state
+.env
+*.key
+*.pem
+*token*
+*secret*
+
+# Application state, logs, caches, downloads, and generated data
+config/**
+data/**
+*.db
+*.db-*
+*.log
+cache/
+logs/
+
+# Keep the reviewed Recyclarr profiles, but never its credential file.
+!recyclarr/
+!recyclarr/*.yml
+recyclarr/secrets.yml
