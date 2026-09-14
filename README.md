@@ -96,6 +96,29 @@ including LibreTranslate's downloaded language models.
 These steps assume Ubuntu or Debian and a user with sudo access. Use a static
 LAN IP or a DHCP reservation for the server before continuing.
 
+### Fast path: restore onto a replacement server
+
+After copying or cloning this repository to the new server, the included setup
+script can perform the directory setup, Docker installation, configuration
+restore, core-service start, Lingarr deployment, Maintainerr deployment, and
+optional Tailscale installation in one run:
+
+```bash
+cd /home/$USER/media-stack-config-git
+./scripts/setup-new-server.sh \
+  --lan-ip 192.168.1.50 \
+  --restore /path/to/media-stack-config-backup.zip \
+  --install-docker \
+  --install-tailscale
+```
+
+Use the new server's own LAN IP. Mount or copy the media disk at
+`/srv/media-stack/data/media` after the command finishes. The script refuses
+to overwrite an existing `/srv/media-stack/compose.yml`, never starts the
+Cloudflare tunnel automatically, and begins an interactive Tailscale login if
+requested. A clean setup without `--restore` starts only the core services;
+their first-time web configuration still needs to be completed in the apps.
+
 ### 1. Install the base tools
 
 Install Docker Engine and the Compose plugin using Docker's current official
