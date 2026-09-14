@@ -119,6 +119,20 @@ Cloudflare tunnel automatically, and begins an interactive Tailscale login if
 requested. A clean setup without `--restore` starts only the core services;
 their first-time web configuration still needs to be completed in the apps.
 
+For a clean build with no configuration ZIP, use:
+
+```bash
+cd /home/$USER/media-stack-config-git
+./scripts/setup-new-server.sh \
+  --lan-ip 192.168.1.50 \
+  --install-docker \
+  --install-tailscale
+```
+
+Then follow the numbered application-configuration list in [Start the core
+services](#4-start-the-core-services), and finally run
+`deploy-lingarr.sh` and `deploy-maintainerr.sh` as shown below it.
+
 ### 1. Install the base tools
 
 Install Docker Engine and the Compose plugin using Docker's current official
