@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#141b2d">
+  <meta name="description" content="Request subtitle translations for your Jellyfin library.">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/app.css">
+  <title>Lingarr Requests</title>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand"><img src="/icon.svg" alt=""><div><h1>Lingarr Requests</h1><p>Translate a subtitle for one movie or episode</p></div></div>
+      <button id="logout" class="quiet hidden" type="button">Sign out</button>
+    </header>
+    <section id="login-panel" class="panel narrow">
+      <h2>Sign in with Jellyfin</h2>
+      <form id="login-form">
+        <label>Username<input id="username" name="username" autocomplete="username" required></label>
+        <label>Password<input id="password" name="password" type="password" autocomplete="current-password" required></label>
+        <button class="primary" type="submit">Sign in</button>
+      </form>
+      <p class="muted">Your Jellyfin password is sent only to this private server over HTTPS.</p>
+    </section>
+    <section id="app-panel" class="hidden">
+      <section class="panel">
+        <label class="search-label" for="search">Find a movie, show, or episode</label>
+        <input id="search" type="search" placeholder="Start typing a title…" autocomplete="off" enterkeyhint="search">
+        <p class="muted">Choose one movie or a specific episode. A show opens its episode list.</p>
+      </section>
+      <section id="results" class="stack" aria-live="polite"></section>
+      <section id="selected" class="panel hidden" aria-live="polite"></section>
+      <section id="requests" class="panel hidden">
+        <h2>Requests</h2><div id="request-list" class="stack"></div>
+      </section>
+    </section>
+    <div id="notice" class="notice hidden" role="status"></div>
+    <footer>Private access requires a connection to Tailscale.</footer>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>

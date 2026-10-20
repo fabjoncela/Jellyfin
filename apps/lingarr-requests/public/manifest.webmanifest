@@ -1,0 +1,10 @@
+{
+  "name": "Lingarr Requests",
+  "short_name": "Translate",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0c1220",
+  "theme_color": "#141b2d",
+  "icons": [{"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}

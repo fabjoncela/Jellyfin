@@ -183,16 +183,23 @@ services:
     restart: unless-stopped
 
   libretranslate:
-    # Local, offline English-to-Albanian translation engine. It has no host
-    # port, so only Lingarr on the private media network can reach it.
+    # Local, offline English-to-Italian/Albanian translation engine. It has no
+    # host port, so only Lingarr on the private media network can reach it.
     image: ${LIBRETRANSLATE_IMAGE:-libretranslate/libretranslate:v1.9.6@sha256:98d9ec356102a93ffb4e88046688a1a7ab2f3bf8e54b63588332c04f9686a668}
     container_name: libretranslate
+    # This is an on-demand dependency managed by
+    # lingarr-libretranslate-watchdog.service. Keep its CPU use bounded when
+    # actual translations are in progress, and do not auto-start it at boot.
+    cpus: "1.0"
     # The upstream image's Argos-model directory is a Docker named volume.
     # Run as container-root so a fresh root-owned volume can be initialized;
     # this service has no host bind mounts or published port.
     user: "0:0"
     environment:
-      LT_LOAD_ONLY: "en,sq"
+      # The persistent model volume already existed with English/Albanian.
+      # Update its model set on startup so Italian is installed as well.
+      LT_UPDATE_MODELS: "true"
+      LT_LOAD_ONLY: "en,it,sq"
       LT_DISABLE_WEB_UI: "true"
     volumes:
       - type: volume
@@ -208,11 +215,11 @@ services:
       timeout: 10s
       retries: 10
       start_period: 90s
-    restart: unless-stopped
+    restart: "no"
 
   lingarr:
-    # Automates the fallback: keep native Albanian subtitles when present;
-    # otherwise translate a matching English subtitle with LibreTranslate.
+    # Automates the fallback: keep native Italian/Albanian subtitles when
+    # present; otherwise translate a matching English subtitle locally.
     image: ${LINGARR_IMAGE:-lingarr/lingarr:1.3.0@sha256:c250b0e43cf06690676dd9b1a12a37eaec86eea93488673cc74cc18dbd6680b3}
     container_name: lingarr
     user: "${PUID}:${PGID}"
@@ -226,7 +233,7 @@ services:
       SERVICE_TYPE: '["libretranslate"]'
       LIBRE_TRANSLATE_URL: http://libretranslate:5000
       SOURCE_LANGUAGES: '[{"name":"English","code":"en"}]'
-      TARGET_LANGUAGES: '[{"name":"Albanian","code":"sq"}]'
+      TARGET_LANGUAGES: '[{"name":"Italian","code":"it"},{"name":"Albanian","code":"sq"}]'
       # Lingarr is LAN-only and is not added to Tailscale Serve or Funnel.
       # Authentication is disabled only for the trusted home LAN, matching
       # Bazarr's existing LAN-only administration model.
@@ -247,11 +254,56 @@ services:
       - "127.0.0.1:9876:9876/tcp"
     networks:
       - media
-    depends_on:
-      libretranslate:
-        condition: service_healthy
+    # LibreTranslate is deliberately not a Compose startup dependency: the
+    # host watchdog starts it only for a real Lingarr TranslationJob, waits for
+    # its health check, then releases Lingarr's queued work.
     security_opt:
       - no-new-privileges:true
+    restart: unless-stopped
+
+  lingarr-requests:
+    # Tailnet-only companion PWA for selecting one Jellyfin movie/episode and
+    # submitting a native file-backed Lingarr translation request.
+    image: media-stack/lingarr-requests:local
+    build:
+      context: /home/fabjon/media-stack-config-git/apps/lingarr-requests
+    container_name: lingarr-requests
+    user: "1000:1000"
+    environment:
+      PORT: "8080"
+      JELLYFIN_URL: http://jellyfin:8096
+      LINGARR_URL: http://lingarr:9876
+      MEDIA_ROOT: /media
+      LINGARR_MEDIA_ROOT: /data/media
+      STATE_DB: /state/requests.sqlite3
+    volumes:
+      - type: bind
+        source: /srv/media-stack/data/media
+        target: /media
+        read_only: true
+      - type: bind
+        source: /srv/media-stack/config/lingarr-requests
+        target: /state
+    ports:
+      - "127.0.0.1:3011:8080/tcp"
+    networks:
+      - media
+    cpus: "0.25"
+    mem_limit: 256m
+    pids_limit: 64
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     restart: unless-stopped
 
   recyclarr:

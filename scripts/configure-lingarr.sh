@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 # Complete Lingarr's first-run setup using the existing Arr credentials without
-# printing them. This configures a low-impact overnight translation schedule.
+# printing them. It checks for newly imported media every fifteen minutes and
+# starts translations on the separate five-minute schedule.
 set -eu
 
 lingarr_url='http://127.0.0.1:9876'
@@ -36,7 +37,7 @@ curl --fail --silent --show-error \
 
 settings_payload=$(jq -n \
   --arg source_languages '[{"name":"English","code":"en"}]' \
-  --arg target_languages '[{"name":"Albanian","code":"sq"}]' \
+  --arg target_languages '[{"name":"Italian","code":"it"},{"name":"Albanian","code":"sq"}]' \
   '{
     source_languages: $source_languages,
     target_languages: $target_languages,
@@ -46,13 +47,12 @@ settings_payload=$(jq -n \
     sonarr_url: "http://sonarr:8989",
     radarr_default_include: "true",
     sonarr_default_include: "true",
-    # Refresh both libraries hourly, then translate one pending fallback ten
-    # minutes later. Staggering prevents a library sync and a CPU-heavy
-    # translation from starting at the same moment.
-    movie_schedule: "0 * * * *",
-    show_schedule: "0 * * * *",
-    translation_schedule: "10 * * * *",
-    max_translations_per_run: "3",
+    # Refresh both libraries every fifteen minutes. Translation batches keep
+    # their separate five-minute schedule so detected work is picked up soon.
+    movie_schedule: "*/15 * * * *",
+    show_schedule: "*/15 * * * *",
+    translation_schedule: "2-59/5 * * * *",
+    max_translations_per_run: "1",
     movie_age_threshold: "0",
     show_age_threshold: "0",
     ignore_captions: "false"
@@ -77,13 +77,13 @@ for integration in radarr sonarr; do
     --output /dev/null
 done
 
-# Enable the task only after both Arr integrations and its nightly settings are
-# stored. The listener then checks hourly for up to three English-to-Albanian
-# fallbacks after the hourly library index.
+# Enable the task only after both Arr integrations and its settings are stored.
+# It then starts one English-to-Italian and English-to-Albanian fallback job
+# on the separate five-minute translation schedule.
 curl --fail --silent --show-error \
   --header 'Content-Type: application/json' \
   --data '{"key":"automation_enabled","value":"true"}' \
   "$lingarr_url/api/setting" \
   --output /dev/null
 
-printf '%s\n' 'Lingarr is configured: library scan hourly; up to three fallback translations at :10 each hour.'
+printf '%s\n' 'Lingarr is configured: library scans every fifteen minutes; translation schedule is unchanged.'
