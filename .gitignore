@@ -1,5 +1,7 @@
 # Secrets and machine-specific runtime state
 .env
+**/__pycache__/
+*.py[cod]
 *.key
 *.pem
 *token*

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex,nofollow">
+    <title>Media Operations</title>
+    <link rel="stylesheet" href="/style.css?v=7">
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">PRIVATE · TAILSCALE ONLY</p>
+          <h1>Media Operations</h1>
+          <p class="subhead">Trace a request from Seerr through download, import, subtitles, and library availability.</p>
+        </div>
+        <div class="header-actions">
+          <span id="health" class="health">Checking services…</span>
+          <button id="refresh" type="button">Refresh</button>
+        </div>
+      </header>
+
+      <section class="notice">
+        Diagnostics are read-only. Interactive Radarr searches and manual grabs require the separate dashboard action passphrase, an explicit confirmation, and remain limited to missing movie requests.
+      </section>
+
+      <section aria-labelledby="attention-heading">
+        <div class="section-heading">
+          <h2 id="attention-heading">Attention needed</h2>
+          <span id="attention-count"></span>
+        </div>
+        <div id="attention" class="attention" aria-live="polite"><p>Checking for issues…</p></div>
+      </section>
+
+      <section aria-labelledby="requests-heading">
+        <div class="section-heading">
+          <h2 id="requests-heading">Recent requests</h2>
+          <span id="request-count"></span>
+        </div>
+        <form id="request-filters" class="filters" aria-label="Filter requests">
+          <label>
+            Search title
+            <input id="request-search" type="search" placeholder="Type a title" autocomplete="off">
+          </label>
+          <label>
+            Status
+            <select id="request-status">
+              <option value="">All statuses</option>
+              <option>Pending approval</option>
+              <option>Approved</option>
+              <option>Completed</option>
+              <option>Declined</option>
+              <option>Failed</option>
+            </select>
+          </label>
+          <label>
+            Updated
+            <select id="request-age">
+              <option value="">Any time</option>
+              <option value="24">Past 24 hours</option>
+              <option value="168">Past 7 days</option>
+              <option value="720">Past 30 days</option>
+            </select>
+          </label>
+          <button id="clear-filters" type="button" class="secondary">Clear filters</button>
+        </form>
+        <div id="requests" class="requests" aria-live="polite"><p>Loading requests…</p></div>
+      </section>
+
+      <section id="detail" class="detail hidden" aria-live="polite">
+        <div class="section-heading">
+          <div>
+            <p id="detail-kind" class="eyebrow"></p>
+            <h2 id="detail-title"></h2>
+          </div>
+          <div class="detail-actions">
+            <button id="copy-diagnostic" type="button" disabled>Copy AI-ready report</button>
+            <button id="close-detail" type="button" class="secondary">Close</button>
+          </div>
+        </div>
+        <div id="summary" class="summary"></div>
+        <div class="columns">
+          <article>
+            <h3>Active queue</h3>
+            <div id="queue"></div>
+          </article>
+          <article>
+            <h3>External subtitles</h3>
+            <div id="sidecars"></div>
+          </article>
+        </div>
+        <article id="interactive-search" class="interactive hidden">
+          <h3>Interactive Radarr search</h3>
+          <p id="interactive-status" class="muted">Available only for a monitored movie with no imported file.</p>
+          <div id="action-unlock" class="action-unlock">
+            <label>
+              Action passphrase
+              <input id="action-passphrase" type="password" autocomplete="current-password" spellcheck="false">
+            </label>
+            <button id="unlock-actions" type="button">Unlock downloads for 24 hours</button>
+            <button id="lock-actions" type="button" class="secondary hidden">Lock</button>
+          </div>
+          <div class="interactive-actions">
+            <button id="search-releases" type="button" disabled>Search Radarr releases</button>
+            <label class="release-sort">
+              Order results
+              <select id="release-sort" disabled>
+                <option value="radarr">Radarr order</option>
+                <option value="size-desc">Size: largest first</option>
+                <option value="size-asc">Size: smallest first</option>
+                <option value="seeders-desc">Seeders: most first</option>
+                <option value="seeders-asc">Seeders: fewest first</option>
+              </select>
+            </label>
+            <span class="muted">A search queries your configured indexers but does not download anything.</span>
+          </div>
+          <div id="release-confirmation" class="release-confirmation hidden" aria-live="polite"></div>
+          <div id="release-results" class="release-results" aria-live="polite"></div>
+        </article>
+        <article>
+          <h3>Request timeline</h3>
+          <ol id="timeline" class="timeline"></ol>
+        </article>
+        <article class="diagnostic">
+          <h3>AI-ready diagnostic report</h3>
+          <p id="diagnostic-status" class="muted">Select a request to prepare a diagnostic report.</p>
+        </article>
+        <article>
+          <h3>Service links</h3>
+          <p id="links" class="links"></p>
+        </article>
+      </section>
+    </main>
+    <script src="/app.js?v=8"></script>
+  </body>
+</html>

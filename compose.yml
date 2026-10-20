@@ -53,10 +53,16 @@ services:
         target: /data
     ports:
       - "${JELLYFIN_LAN_IP}:8181:8181/tcp"
+      # Private Tailscale Serve backend; keep the normal LAN binding above.
+      - "127.0.0.1:8181:8181/tcp"
       - "${JELLYFIN_LAN_IP}:6881:6881/tcp"
       - "${JELLYFIN_LAN_IP}:6881:6881/udp"
     networks:
       - media
+    # This workload performs the bulk of the shared HDD I/O. Give Arr's
+    # database and API work priority when the kernel is scheduling disk I/O.
+    blkio_config:
+      weight: 100
     security_opt:
       - no-new-privileges:true
     stop_grace_period: 60s
@@ -76,6 +82,8 @@ services:
         target: /config
     ports:
       - "${JELLYFIN_LAN_IP}:9696:9696/tcp"
+      # Private Tailscale Serve backend; keep the normal LAN binding above.
+      - "127.0.0.1:9696:9696/tcp"
     networks:
       - media
     security_opt:
@@ -99,6 +107,8 @@ services:
         target: /data
     ports:
       - "${JELLYFIN_LAN_IP}:8989:8989/tcp"
+      # Private Tailscale Serve backend; keep the normal LAN binding above.
+      - "127.0.0.1:8989:8989/tcp"
     networks:
       - media
     security_opt:
@@ -122,6 +132,8 @@ services:
         target: /data
     ports:
       - "${JELLYFIN_LAN_IP}:7878:7878/tcp"
+      # Private Tailscale Serve backend; keep the normal LAN binding above.
+      - "127.0.0.1:7878:7878/tcp"
     networks:
       - media
     security_opt:
@@ -157,6 +169,88 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  media-dashboard:
+    # Reuse the already-pulled Seerr image solely for its maintained Node 22
+    # runtime. The dashboard itself uses no third-party Node packages.
+    image: ${SEERR_IMAGE}
+    container_name: media-dashboard
+    entrypoint: ["node", "/app/dashboard/server.js"]
+    user: "${PUID}:${PGID}"
+    environment:
+      TZ: ${TZ}
+      PORT: "3000"
+    volumes:
+      # Dashboard code is immutable from inside the container.
+      - type: bind
+        source: /home/fabjon/media-stack-config-git/apps/media-dashboard
+        target: /app/dashboard
+        read_only: true
+      # Read existing credentials only at runtime; no duplicate secret file is
+      # created and the HTTP API never returns these values.
+      - type: bind
+        source: /srv/media-stack/config/radarr/config.xml
+        target: /run/radarr-config.xml
+        read_only: true
+      - type: bind
+        source: /srv/media-stack/config/sonarr/config.xml
+        target: /run/sonarr-config.xml
+        read_only: true
+      - type: bind
+        source: /srv/media-stack/config/jellyseerr/settings.json
+        target: /run/seerr-settings.json
+        read_only: true
+      # A dashboard-specific passphrase gates the only write actions. It is
+      # never returned to the browser, included in reports, or reused from an
+      # Arr/Seerr credential.
+      - type: bind
+        source: /srv/media-stack/config/media-dashboard/action-token
+        target: /run/dashboard-action-token
+        read_only: true
+      # Correlate only matching request-hand-off evidence. The dashboard
+      # sanitizes every displayed log message and has no write access.
+      - type: bind
+        source: /srv/media-stack/config/jellyseerr/logs
+        target: /run/seerr-logs
+        read_only: true
+      - type: bind
+        source: /srv/media-stack/config/radarr/logs
+        target: /run/radarr-logs
+        read_only: true
+      # Expose only the kernel's aggregate pressure-stall counters, not the
+      # host process table, filesystem, or Docker socket.
+      - type: bind
+        source: /proc/pressure
+        target: /run/host-pressure
+        read_only: true
+      # Subtitle presence is derived from the actual media directories.
+      - type: bind
+        source: /srv/media-stack/data/media
+        target: /data/media
+        read_only: true
+      # Only qBittorrent's rolling activity log is read, and only matching
+      # per-title events are included in a response.
+      - type: bind
+        source: /srv/media-stack/config/qbittorrent/qBittorrent/logs
+        target: /run/qbittorrent
+        read_only: true
+    ports:
+      # Tailnet-only: Tailscale Serve is the sole published access path.
+      - "127.0.0.1:3000:3000/tcp"
+    networks:
+      - media
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/api/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
   bazarr:
     image: ${BAZARR_IMAGE}
     container_name: bazarr
@@ -176,6 +270,8 @@ services:
         target: /data
     ports:
       - "${JELLYFIN_LAN_IP}:6767:6767/tcp"
+      # Private Tailscale Serve backend; keep the normal LAN binding above.
+      - "127.0.0.1:6767:6767/tcp"
     networks:
       - media
     security_opt:
@@ -234,9 +330,9 @@ services:
       LIBRE_TRANSLATE_URL: http://libretranslate:5000
       SOURCE_LANGUAGES: '[{"name":"English","code":"en"}]'
       TARGET_LANGUAGES: '[{"name":"Italian","code":"it"},{"name":"Albanian","code":"sq"}]'
-      # Lingarr is LAN-only and is not added to Tailscale Serve or Funnel.
-      # Authentication is disabled only for the trusted home LAN, matching
-      # Bazarr's existing LAN-only administration model.
+      # Tailscale Serve publishes the host-loopback backend privately to the
+      # tailnet. Authentication remains disabled, so tailnet membership is
+      # the access boundary for remote access.
       AUTH_ENABLED: "false"
       TELEMETRY_ENABLED: "false"
     volumes:
@@ -320,7 +416,7 @@ services:
       - media
     security_opt:
       - no-new-privileges:true
-    restart: unless-stopped
+    restart: "no"
 
   maintainerr:
     image: ${MAINTAINERR_IMAGE}
@@ -335,10 +431,11 @@ services:
         source: /srv/media-stack/config/maintainerr
         target: /opt/data
     ports:
-      # Maintainerr has no built-in login; it must remain LAN-only.
+      # Maintainerr has no built-in login. Its loopback backend is published
+      # privately through Tailscale Serve; tailnet membership is the remote
+      # access boundary.
       - "${JELLYFIN_LAN_IP}:6246:6246/tcp"
-      # Used only by the local setup script. Maintainerr is never exposed by
-      # Tailscale Serve, Funnel, or Cloudflare.
+      # Private Tailscale Serve backend; keep the normal LAN binding above.
       - "127.0.0.1:6246:6246/tcp"
     networks:
       - media
